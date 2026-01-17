@@ -57,15 +57,8 @@ const bookingSchema = new Schema<IBooking, IBookingModel>({
   },
   checkIn: {
     type: Date,
-    required: [true, 'Check-in date is required'],
-    validate: {
-      validator: function(value: Date) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        return value >= today;
-      },
-      message: 'Check-in date cannot be in the past'
-    }
+    required: [true, 'Check-in date is required']
+    // Removed validator - we handle this in the controller
   },
   checkOut: {
     type: Date,
@@ -75,7 +68,7 @@ const bookingSchema = new Schema<IBooking, IBookingModel>({
     type: Number,
     required: [true, 'Number of guests is required'],
     min: [1, 'At least 1 guest is required'],
-    max: [10, 'Maximum 10 guests allowed']
+    max: [20, 'Maximum 20 guests allowed'] // Increased from 10
   },
   totalPrice: {
     type: Number,
@@ -103,11 +96,11 @@ const bookingSchema = new Schema<IBooking, IBookingModel>({
       values: ['pending', 'confirmed', 'cancelled', 'completed'],
       message: '{VALUE} is not a valid status'
     },
-    default: 'pending'
+    default: 'confirmed' // Changed from 'pending' to 'confirmed' for auto-confirmation
   },
   specialRequests: {
     type: String,
-    maxlength: [500, 'Special requests cannot exceed 500 characters'],
+    maxlength: [1000, 'Special requests cannot exceed 1000 characters'], // Increased from 500
     trim: true
   },
   guestName: {
@@ -127,8 +120,8 @@ const bookingSchema = new Schema<IBooking, IBookingModel>({
   guestPhone: {
     type: String,
     required: [true, 'Guest phone is required'],
-    trim: true,
-    match: [/^[0-9]{10,15}$/, 'Please enter a valid phone number (10-15 digits)']
+    trim: true
+    // Removed strict regex to allow international formats
   },
   paymentStatus: {
     type: String,
@@ -182,6 +175,7 @@ const bookingSchema = new Schema<IBooking, IBookingModel>({
 // INDEXES FOR PERFORMANCE
 // ============================================
 bookingSchema.index({ room: 1, checkIn: 1, checkOut: 1 });
+bookingSchema.index({ room: 1, status: 1 });
 bookingSchema.index({ user: 1, createdAt: -1 });
 bookingSchema.index({ bookingReference: 1 });
 bookingSchema.index({ status: 1 });
@@ -223,9 +217,10 @@ bookingSchema.virtual('formattedCheckOut').get(function(this: HydratedDocument<I
 bookingSchema.pre('save', function(this: HydratedDocument<IBooking>) {
   // Generate booking reference if not exists
   if (!this.bookingReference) {
-    const timestamp = Date.now();
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    this.bookingReference = `BK${timestamp}${random}`;
+    const prefix = 'BK';
+    const timestamp = Date.now().toString(36).toUpperCase();
+    const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+    this.bookingReference = `${prefix}-${timestamp}-${random}`;
   }
   
   // Calculate nights if not provided
@@ -293,7 +288,7 @@ bookingSchema.methods.getBookingDuration = function(this: HydratedDocument<IBook
 // STATIC METHODS
 // ============================================
 
-// Static method to find overlapping bookings
+// Static method to find overlapping bookings (updated for checkout date blocking)
 bookingSchema.statics.findOverlapping = function(
   roomId: string, 
   checkIn: Date, 
@@ -303,11 +298,9 @@ bookingSchema.statics.findOverlapping = function(
   const query: any = {
     room: roomId,
     status: { $in: ['pending', 'confirmed'] },
-    $or: [
-      { checkIn: { $lte: checkOut, $gte: checkIn } },
-      { checkOut: { $lte: checkOut, $gte: checkIn } },
-      { checkIn: { $lte: checkIn }, checkOut: { $gte: checkOut } }
-    ]
+    // Updated logic to block checkout date as well
+    checkIn: { $lte: checkOut },
+    checkOut: { $gte: checkIn }
   };
   
   if (excludeBookingId) {

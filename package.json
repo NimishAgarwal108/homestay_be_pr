@@ -7,7 +7,7 @@
     "dev": "nodemon src/Server.ts",
     "start": "ts-node src/Server.ts",
     "build": "tsc",
-    "seed": "ts-node src/seed.ts",
+     "seed:rooms": "ts-node src/scripts/seedRooms.ts",
     "create-admin": "ts-node src/scripts/createAdmin.ts"
   },
   "keywords": [],

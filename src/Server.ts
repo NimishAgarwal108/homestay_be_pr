@@ -8,8 +8,11 @@ dotenv.config();
 
 // Import routes
 import adminAuthRoutes from './routes/adminAuthRoutes';
-console.log('🔴 adminAuthRoutes imported:', typeof adminAuthRoutes); 
 import bookingRoutes from './routes/bookingRoutes';
+import roomRoutes from './routes/roomRoutes';
+
+// Import email service verification
+import { verifyEmailConfig } from './utils/emailService';
 
 // Initialize Express app
 const app = express();
@@ -40,8 +43,6 @@ app.get('/', (_req: Request, res: Response) => {
       adminAuth: '/api/admin/auth',
       rooms: '/api/rooms',
       bookings: '/api/bookings',
-      gallery: '/api/gallery',
-      contact: '/api/contact',
       health: '/api/health'
     }
   });
@@ -63,6 +64,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 
 // API Routes - REGISTERED BEFORE ERROR HANDLERS
 app.use('/api/admin/auth', adminAuthRoutes);
+app.use('/api/rooms', roomRoutes);
 app.use('/api/bookings', bookingRoutes);
 
 // Database connection
@@ -72,9 +74,32 @@ const connectDB = async () => {
     await mongoose.connect(mongoURI);
     console.log('✅ MongoDB Connected Successfully');
     console.log(`📊 Database: ${mongoose.connection.name}`);
+    
+    // Verify email service after DB connection
+    await verifyEmailService();
   } catch (error) {
     console.error('❌ MongoDB Connection Error:', error);
     process.exit(1);
+  }
+};
+
+// Email service verification
+const verifyEmailService = async () => {
+  try {
+    console.log('📧 Verifying email service...');
+    const isValid = await verifyEmailConfig();
+    
+    if (isValid) {
+      console.log('✅ Email service configured correctly');
+      console.log(`📬 Admin notifications will be sent to: findmyroom1@gmail.com`);
+    } else {
+      console.warn('⚠️ Email service configuration failed');
+      console.warn('⚠️ Bookings will work but emails won\'t be sent');
+      console.warn('⚠️ Check EMAIL_USER and EMAIL_PASSWORD in .env');
+    }
+  } catch (error) {
+    console.warn('⚠️ Email service verification error:', error);
+    console.warn('⚠️ Bookings will continue to work without email notifications');
   }
 };
 
@@ -165,6 +190,8 @@ app.listen(PORT, () => {
   console.log(`🌐 Server: http://localhost:${PORT}`);
   console.log(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log(`👤 Admin Login: POST http://localhost:${PORT}/api/admin/auth/login`);
+  console.log(`🏨 Rooms API: GET http://localhost:${PORT}/api/rooms`);
+  console.log(`📅 Bookings API: POST http://localhost:${PORT}/api/bookings`);
   console.log('🚀 =============================');
   
   // Connect DB after server starts (non-blocking)
