@@ -10,6 +10,7 @@ dotenv.config();
 import adminAuthRoutes from './routes/adminAuthRoutes';
 import bookingRoutes from './routes/bookingRoutes';
 import roomRoutes from './routes/roomRoutes';
+import menuRoutes from './routes/menuRoutes'; // Add menu routes
 
 // Import email service verification
 import { verifyEmailConfig } from './utils/emailService';
@@ -43,6 +44,7 @@ app.get('/', (_req: Request, res: Response) => {
       adminAuth: '/api/admin/auth',
       rooms: '/api/rooms',
       bookings: '/api/bookings',
+      menu: '/api/menu',
       health: '/api/health'
     }
   });
@@ -66,6 +68,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 app.use('/api/admin/auth', adminAuthRoutes);
 app.use('/api/rooms', roomRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api', menuRoutes); // Add menu routes
 
 // Database connection
 const connectDB = async () => {
@@ -192,6 +195,7 @@ app.listen(PORT, () => {
   console.log(`👤 Admin Login: POST http://localhost:${PORT}/api/admin/auth/login`);
   console.log(`🏨 Rooms API: GET http://localhost:${PORT}/api/rooms`);
   console.log(`📅 Bookings API: POST http://localhost:${PORT}/api/bookings`);
+  console.log(`🍽️ Menu API: GET http://localhost:${PORT}/api/menu`);
   console.log('🚀 =============================');
   
   // Connect DB after server starts (non-blocking)

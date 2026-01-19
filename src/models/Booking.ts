@@ -68,7 +68,7 @@ const bookingSchema = new Schema<IBooking, IBookingModel>({
     type: Number,
     required: [true, 'Number of guests is required'],
     min: [1, 'At least 1 guest is required'],
-    max: [20, 'Maximum 20 guests allowed'] // Increased from 10
+    max: [20, 'Maximum 20 guests allowed']
   },
   totalPrice: {
     type: Number,
@@ -96,11 +96,11 @@ const bookingSchema = new Schema<IBooking, IBookingModel>({
       values: ['pending', 'confirmed', 'cancelled', 'completed'],
       message: '{VALUE} is not a valid status'
     },
-    default: 'confirmed' // Changed from 'pending' to 'confirmed' for auto-confirmation
+    default: 'confirmed'
   },
   specialRequests: {
     type: String,
-    maxlength: [1000, 'Special requests cannot exceed 1000 characters'], // Increased from 500
+    maxlength: [1000, 'Special requests cannot exceed 1000 characters'],
     trim: true
   },
   guestName: {
@@ -121,7 +121,6 @@ const bookingSchema = new Schema<IBooking, IBookingModel>({
     type: String,
     required: [true, 'Guest phone is required'],
     trim: true
-    // Removed strict regex to allow international formats
   },
   paymentStatus: {
     type: String,
@@ -288,7 +287,8 @@ bookingSchema.methods.getBookingDuration = function(this: HydratedDocument<IBook
 // STATIC METHODS
 // ============================================
 
-// Static method to find overlapping bookings (updated for checkout date blocking)
+// FIXED: Static method to find overlapping bookings
+// Changed from $lte/$gte to $lt/$gt to allow checkout day as checkin day
 bookingSchema.statics.findOverlapping = function(
   roomId: string, 
   checkIn: Date, 
@@ -298,9 +298,10 @@ bookingSchema.statics.findOverlapping = function(
   const query: any = {
     room: roomId,
     status: { $in: ['pending', 'confirmed'] },
-    // Updated logic to block checkout date as well
-    checkIn: { $lte: checkOut },
-    checkOut: { $gte: checkIn }
+    // FIXED: Use $lt and $gt instead of $lte and $gte
+    // This allows new guests to check in on the same day previous guests check out
+    checkIn: { $lt: checkOut },
+    checkOut: { $gt: checkIn }
   };
   
   if (excludeBookingId) {

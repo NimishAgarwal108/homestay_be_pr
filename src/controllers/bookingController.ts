@@ -160,16 +160,25 @@ export const createBooking = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    // Check for overlapping bookings (includes checkout date blocking)
+    // FIXED: Check for overlapping bookings (checkout day is available for new checkin)
     const conflictingBooking = await Booking.findOne({
       room: roomId,
       status: { $in: ['pending', 'confirmed'] },
-      checkIn: { $lte: checkOutDate },
-      checkOut: { $gte: checkInDate }
+      // Key fix: Use $lt instead of $lte for checkOut comparison
+      // This allows new guests to check in on the same day previous guests check out
+      checkIn: { $lt: checkOutDate },
+      checkOut: { $gt: checkInDate }
     });
 
     if (conflictingBooking) {
       console.log('❌ Conflicting booking found:', conflictingBooking._id);
+      console.log('❌ Conflict details:', {
+        existingCheckIn: conflictingBooking.checkIn,
+        existingCheckOut: conflictingBooking.checkOut,
+        requestedCheckIn: checkInDate,
+        requestedCheckOut: checkOutDate
+      });
+      
       res.status(400).json({
         success: false,
         message: 'Room is not available for selected dates. Please choose different dates.',
@@ -181,6 +190,8 @@ export const createBooking = async (req: Request, res: Response): Promise<void> 
       });
       return;
     }
+
+    console.log('✅ No conflicts found - dates are available');
 
     // Create booking with auto-confirmation
     const booking = await Booking.create({
@@ -282,12 +293,13 @@ export const updateBooking = async (req: Request, res: Response): Promise<void> 
         ? new Date(req.body.checkOut + 'T00:00:00.000Z') 
         : booking.checkOut;
 
+      // FIXED: Same overlap logic fix for updates
       const conflictingBooking = await Booking.findOne({
         _id: { $ne: req.params.id },
         room: booking.room,
         status: { $in: ['pending', 'confirmed'] },
-        checkIn: { $lte: newCheckOut },
-        checkOut: { $gte: newCheckIn }
+        checkIn: { $lt: newCheckOut },
+        checkOut: { $gt: newCheckIn }
       });
 
       if (conflictingBooking) {
@@ -518,12 +530,12 @@ export const checkAvailability = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    // Check for overlapping bookings (includes checkout date blocking)
+    // FIXED: Check for overlapping bookings (checkout day is available for new checkin)
     const conflictingBooking = await Booking.findOne({
       room: roomId,
       status: { $in: ['pending', 'confirmed'] },
-      checkIn: { $lte: checkOutDate },
-      checkOut: { $gte: checkInDate }
+      checkIn: { $lt: checkOutDate },
+      checkOut: { $gt: checkInDate }
     });
 
     if (conflictingBooking) {
@@ -554,6 +566,8 @@ export const checkAvailability = async (req: Request, res: Response): Promise<vo
     const basePrice = pricePerNight * nights;
     const taxAmount = Math.round(basePrice * 0.12); // 12% tax
     const totalPrice = basePrice + taxAmount;
+
+    console.log('✅ No conflicts found - dates are available');
 
     // Room is available - return availability with pricing
     res.status(200).json({
