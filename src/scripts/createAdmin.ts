@@ -6,13 +6,10 @@ dotenv.config();
 
 const createAdmin = async () => {
   try {
-    // Get email from environment variable
-    const adminEmail = process.env.EMAIL_USER;
-    
-    if (!adminEmail) {
-      console.error('❌ EMAIL_USER is not set in .env file');
-      process.exit(1);
-    }
+    // New admin credentials
+    const newAdminEmail = 'admin@aamantranstays.com';
+    const newAdminPassword = 'Aam@ntar@n12!';
+    const newAdminName = 'Dr Mayank Mall';
 
     // Connect to MongoDB
     const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/homestay';
@@ -20,23 +17,37 @@ const createAdmin = async () => {
     console.log('✅ MongoDB Connected');
 
     // Check if admin already exists
-    const existingAdmin = await Admin.findOne({ email: adminEmail });
+    const existingAdmin = await Admin.findOne({ email: newAdminEmail });
     
     if (existingAdmin) {
-      console.log('⚠️  Admin already exists!');
+      console.log('⚠️  Admin with this email already exists!');
+      console.log('🔄 Updating existing admin...');
+      
+      // Update the existing admin
+      existingAdmin.name = newAdminName;
+      existingAdmin.email = newAdminEmail;
+      existingAdmin.password = newAdminPassword; // Will be auto-hashed by pre-save hook
+      existingAdmin.isActive = true;
+      
+      await existingAdmin.save();
+      
+      console.log('✅ Admin updated successfully!');
       console.log('========================');
-      console.log('Email:', existingAdmin.email);
       console.log('Name:', existingAdmin.name);
+      console.log('Email:', existingAdmin.email);
+      console.log('Password:', newAdminPassword);
+      console.log('Role:', existingAdmin.role);
       console.log('========================');
-      console.log('If you want to reset the password, delete this admin from MongoDB first.');
+      console.log('🔐 You can now login at: POST /api/admin/auth/login');
+      
       process.exit(0);
     }
 
-    // Create admin
+    // Create new admin if doesn't exist
     const admin = await Admin.create({
-      name: 'Nimish Agarwal',
-      email: adminEmail,
-      password: '123456',
+      name: newAdminName,
+      email: newAdminEmail,
+      password: newAdminPassword,
       role: 'admin',
       isActive: true
     });
@@ -45,14 +56,14 @@ const createAdmin = async () => {
     console.log('========================');
     console.log('Name:', admin.name);
     console.log('Email:', admin.email);
-    console.log('Password: 123456');
+    console.log('Password:', newAdminPassword);
     console.log('Role:', admin.role);
     console.log('========================');
     console.log('🔐 You can now login at: POST /api/admin/auth/login');
 
     process.exit(0);
   } catch (error: any) {
-    console.error('❌ Error creating admin:', error.message);
+    console.error('❌ Error creating/updating admin:', error.message);
     process.exit(1);
   }
 };

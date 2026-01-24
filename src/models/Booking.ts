@@ -7,6 +7,7 @@ export interface IBooking extends Document {
   checkIn: Date;
   checkOut: Date;
   guests: number;
+  numberOfRooms: number; // ✅ ADDED
   totalPrice: number;
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
   specialRequests?: string;
@@ -58,7 +59,6 @@ const bookingSchema = new Schema<IBooking, IBookingModel>({
   checkIn: {
     type: Date,
     required: [true, 'Check-in date is required']
-    // Removed validator - we handle this in the controller
   },
   checkOut: {
     type: Date,
@@ -69,6 +69,12 @@ const bookingSchema = new Schema<IBooking, IBookingModel>({
     required: [true, 'Number of guests is required'],
     min: [1, 'At least 1 guest is required'],
     max: [20, 'Maximum 20 guests allowed']
+  },
+  numberOfRooms: { // ✅ ADDED
+    type: Number,
+    required: [true, 'Number of rooms is required'],
+    min: [1, 'At least 1 room is required'],
+    max: [6, 'Maximum 6 rooms allowed']
   },
   totalPrice: {
     type: Number,
@@ -214,7 +220,6 @@ bookingSchema.virtual('formattedCheckOut').get(function(this: HydratedDocument<I
 
 // Generate booking reference before saving
 bookingSchema.pre('save', function(this: HydratedDocument<IBooking>) {
-  // Generate booking reference if not exists
   if (!this.bookingReference) {
     const prefix = 'BK';
     const timestamp = Date.now().toString(36).toUpperCase();
@@ -222,13 +227,11 @@ bookingSchema.pre('save', function(this: HydratedDocument<IBooking>) {
     this.bookingReference = `${prefix}-${timestamp}-${random}`;
   }
   
-  // Calculate nights if not provided
   if (!this.nights) {
     const diffTime = Math.abs(this.checkOut.getTime() - this.checkIn.getTime());
     this.nights = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   }
   
-  // Calculate total price if not provided
   if (this.pricePerNight && !this.totalPrice) {
     const basePrice = this.pricePerNight * this.nights;
     const tax = this.taxAmount || 0;
@@ -255,7 +258,6 @@ bookingSchema.pre('validate', function(this: HydratedDocument<IBooking>) {
 // INSTANCE METHODS
 // ============================================
 
-// Method to check if booking can be cancelled
 bookingSchema.methods.canBeCancelled = function(this: HydratedDocument<IBooking>): boolean {
   const now = new Date();
   const checkInDate = new Date(this.checkIn);
@@ -266,7 +268,6 @@ bookingSchema.methods.canBeCancelled = function(this: HydratedDocument<IBooking>
          hoursDiff > 24;
 };
 
-// Method to calculate total price
 bookingSchema.methods.calculateTotalPrice = function(this: HydratedDocument<IBooking>, pricePerNight: number): number {
   const basePrice = pricePerNight * this.nights;
   const tax = this.taxAmount || 0;
@@ -274,7 +275,6 @@ bookingSchema.methods.calculateTotalPrice = function(this: HydratedDocument<IBoo
   return basePrice + tax - discount;
 };
 
-// Method to get booking duration
 bookingSchema.methods.getBookingDuration = function(this: HydratedDocument<IBooking>): string {
   const checkIn = new Date(this.checkIn);
   const checkOut = new Date(this.checkOut);
@@ -287,8 +287,6 @@ bookingSchema.methods.getBookingDuration = function(this: HydratedDocument<IBook
 // STATIC METHODS
 // ============================================
 
-// FIXED: Static method to find overlapping bookings
-// Changed from $lte/$gte to $lt/$gt to allow checkout day as checkin day
 bookingSchema.statics.findOverlapping = function(
   roomId: string, 
   checkIn: Date, 
@@ -298,8 +296,6 @@ bookingSchema.statics.findOverlapping = function(
   const query: any = {
     room: roomId,
     status: { $in: ['pending', 'confirmed'] },
-    // FIXED: Use $lt and $gt instead of $lte and $gte
-    // This allows new guests to check in on the same day previous guests check out
     checkIn: { $lt: checkOut },
     checkOut: { $gt: checkIn }
   };
@@ -311,7 +307,6 @@ bookingSchema.statics.findOverlapping = function(
   return this.findOne(query);
 };
 
-// Static method to get bookings by date range
 bookingSchema.statics.getBookingsByDateRange = function(
   startDate: Date, 
   endDate: Date
@@ -325,7 +320,6 @@ bookingSchema.statics.getBookingsByDateRange = function(
   .sort({ checkIn: 1 });
 };
 
-// Static method to calculate revenue by date range
 bookingSchema.statics.getRevenueByDateRange = async function(
   startDate: Date, 
   endDate: Date
@@ -349,5 +343,4 @@ bookingSchema.statics.getRevenueByDateRange = async function(
   return result.length > 0 ? result[0].totalRevenue : 0;
 };
 
-// Export the model
 export default mongoose.model<IBooking, IBookingModel>('Booking', bookingSchema);

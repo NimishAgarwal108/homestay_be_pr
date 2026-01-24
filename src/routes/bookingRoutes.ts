@@ -1,4 +1,3 @@
-// src/routes/bookingRoutes.ts
 import express from 'express';
 import {
   createBooking,
@@ -9,9 +8,15 @@ import {
   deleteBooking,
   getMyBookings,
   checkAvailability
-} from '../controllers/booking'; // ✅ UPDATED: Changed from '../controllers/bookingController'
+} from '../controllers/booking';
 import { protect, authorize } from '../middleware/authMiddleware';
 import { adminAuth } from '../middleware/adminAuth';
+import { validateRequest } from '../middleware/validateRequest';
+import {
+  createBookingSchema,
+  updateBookingSchema,
+  checkAvailabilitySchema
+} from '../validators/bookingValidator';
 
 const router = express.Router();
 
@@ -20,7 +25,11 @@ const router = express.Router();
  * @desc    Check room availability
  * @access  Public
  */
-router.post('/check-availability', checkAvailability);
+router.post(
+  '/check-availability',
+  validateRequest(checkAvailabilitySchema),
+  checkAvailability
+);
 
 /**
  * @route   GET /api/bookings/my-bookings
@@ -34,7 +43,11 @@ router.get('/my-bookings', protect, getMyBookings);
  * @desc    Create a new booking
  * @access  Public (guests can book without login)
  */
-router.post('/', createBooking);
+router.post(
+  '/',
+  validateRequest(createBookingSchema),
+  createBooking
+);
 
 /**
  * @route   GET /api/bookings
@@ -55,7 +68,12 @@ router.get('/:id', adminAuth, getBookingById);
  * @desc    Update booking
  * @access  Private (Admin only)
  */
-router.put('/:id', adminAuth, updateBooking);
+router.put(
+  '/:id',
+  adminAuth,
+  validateRequest(updateBookingSchema),
+  updateBooking
+);
 
 /**
  * @route   PATCH /api/bookings/:id/cancel

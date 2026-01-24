@@ -1,4 +1,3 @@
-// src/services/bookingService.ts
 import Booking from '../models/Booking';
 import { sendBookingNotificationToAdmin } from '../utils/emailService';
 
@@ -8,6 +7,7 @@ interface CreateBookingData {
   checkIn: Date;
   checkOut: Date;
   guests: number;
+  numberOfRooms: number; // ✅ ADDED
   guestName: string;
   guestEmail: string;
   guestPhone: string;
@@ -25,6 +25,7 @@ interface UpdateBookingData {
   checkIn?: string;
   checkOut?: string;
   guests?: number;
+  numberOfRooms?: number; // ✅ ADDED
   status?: string;
   paymentStatus?: string;
   specialRequests?: string;
@@ -39,9 +40,6 @@ interface BookingQueryParams {
 }
 
 export class BookingService {
-  /**
-   * Build query object from filters
-   */
   static buildBookingQuery(params: BookingQueryParams) {
     const query: any = {};
 
@@ -66,9 +64,6 @@ export class BookingService {
     return query;
   }
 
-  /**
-   * Get all bookings with filters
-   */
   static async getAllBookings(params: BookingQueryParams) {
     const query = this.buildBookingQuery(params);
 
@@ -80,9 +75,6 @@ export class BookingService {
     return bookings;
   }
 
-  /**
-   * Get single booking by ID
-   */
   static async getBookingById(bookingId: string) {
     const booking = await Booking.findById(bookingId)
       .populate('room', 'name type price images amenities')
@@ -91,9 +83,6 @@ export class BookingService {
     return booking;
   }
 
-  /**
-   * Get user's bookings
-   */
   static async getUserBookings(userId: string) {
     const bookings = await Booking.find({ user: userId })
       .populate('room', 'name type price images')
@@ -102,9 +91,6 @@ export class BookingService {
     return bookings;
   }
 
-  /**
-   * Create new booking
-   */
   static async createBooking(data: CreateBookingData) {
     const booking = await Booking.create({
       user: data.user,
@@ -112,6 +98,7 @@ export class BookingService {
       checkIn: data.checkIn,
       checkOut: data.checkOut,
       guests: Number(data.guests),
+      numberOfRooms: Number(data.numberOfRooms), // ✅ ADDED
       guestName: data.guestName.trim(),
       guestEmail: data.guestEmail.trim().toLowerCase(),
       guestPhone: data.guestPhone.trim(),
@@ -127,15 +114,11 @@ export class BookingService {
 
     console.log('✅ Booking created:', booking.bookingReference);
 
-    // Populate room details
     await booking.populate('room', 'name type price images');
 
     return booking;
   }
 
-  /**
-   * Update booking
-   */
   static async updateBooking(bookingId: string, data: UpdateBookingData) {
     const updatedBooking = await Booking.findByIdAndUpdate(
       bookingId,
@@ -146,9 +129,6 @@ export class BookingService {
     return updatedBooking;
   }
 
-  /**
-   * Cancel booking
-   */
   static async cancelBooking(
     bookingId: string,
     userId?: string,
@@ -167,7 +147,7 @@ export class BookingService {
     booking.status = 'cancelled';
     booking.cancelledAt = new Date();
     if (userId) {
-      booking.cancelledBy = userId as any; // Type assertion for ObjectId
+      booking.cancelledBy = userId as any;
     }
     if (reason) {
       booking.cancellationReason = reason;
@@ -178,9 +158,6 @@ export class BookingService {
     return booking;
   }
 
-  /**
-   * Delete booking
-   */
   static async deleteBooking(bookingId: string) {
     const booking = await Booking.findById(bookingId);
 
@@ -193,9 +170,6 @@ export class BookingService {
     return booking;
   }
 
-  /**
-   * Send booking notification email to admin
-   */
   static async sendBookingNotification(booking: any, room: any) {
     try {
       await sendBookingNotificationToAdmin({
@@ -214,7 +188,6 @@ export class BookingService {
       console.log('📧 Admin notification email sent');
     } catch (emailError) {
       console.error('❌ Email notification failed:', emailError);
-      // Don't fail the booking if email fails
     }
   }
 }
