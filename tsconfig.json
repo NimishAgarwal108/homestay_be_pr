@@ -14,7 +14,7 @@
     "allowSyntheticDefaultImports": true,
     "allowJs": true,
     "noEmit": true,
-    "isolatedModules": true
+    "isolatedModules": false
   },
   "include": ["src/**/*", "api/**/*"],
   "exclude": ["node_modules", "dist"]

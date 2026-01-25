@@ -18,12 +18,12 @@ import { verifyEmailConfig } from '../src/utils/emailService';
 // Initialize Express app
 const app = express();
 
-// Middleware
+// Middleware - Allow all origins for now (fix CORS issues)
 app.use(cors({
-  origin: process.env.CLIENT_URL || '*',
-  credentials: true,
+  origin: '*', // Allow all origins temporarily
+  credentials: false, // Must be false when origin is '*'
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 app.use(express.json());
