@@ -1,10 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import mongoose from 'mongoose';
-
-// Load environment variables
-dotenv.config();
 
 // Import routes
 import adminAuthRoutes from '../src/routes/adminAuthRoutes';
@@ -18,10 +14,10 @@ import { verifyEmailConfig } from '../src/utils/emailService';
 // Initialize Express app
 const app = express();
 
-// Middleware - Allow all origins for now (fix CORS issues)
+// Middleware
 app.use(cors({
-  origin: '*', // Allow all origins temporarily
-  credentials: false, // Must be false when origin is '*'
+  origin: '*',
+  credentials: false,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
@@ -29,7 +25,7 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Request logging middleware
+// Request logging
 app.use((req: Request, _res: Response, next: NextFunction) => {
   console.log(`${req.method} ${req.path}`);
   next();
@@ -53,14 +49,19 @@ app.get('/', (_req: Request, res: Response) => {
 });
 
 // Health check route
-app.get('/api/health', (_req: Request, res: Response) => {
+app.get('/api/health', async (_req: Request, res: Response) => {
   const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  
+  // Log connection details for debugging
+  console.log('MongoDB Connection State:', mongoose.connection.readyState);
+  console.log('MongoDB URI exists:', !!process.env.MONGODB_URI);
   
   res.status(200).json({ 
     success: true,
     status: 'OK', 
     message: 'Server is running on Vercel',
     database: dbStatus,
+    connectionState: mongoose.connection.readyState,
     timestamp: new Date().toISOString()
   });
 });
@@ -71,46 +72,58 @@ app.use('/api/rooms', roomRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api', menuRoutes);
 
-// Database connection with connection pooling for serverless
-let cachedConnection: typeof mongoose | null = null;
+// Database connection with better error handling
+let isConnecting = false;
 
 const connectDB = async () => {
-  if (cachedConnection && mongoose.connection.readyState === 1) {
-    console.log('✅ Using cached MongoDB connection');
-    return cachedConnection;
+  // If already connected, return
+  if (mongoose.connection.readyState === 1) {
+    console.log('✅ Already connected to MongoDB');
+    return;
+  }
+
+  // If connection is in progress, wait
+  if (isConnecting) {
+    console.log('⏳ Connection already in progress...');
+    return;
   }
 
   try {
+    isConnecting = true;
     const mongoURI = process.env.MONGODB_URI;
     
     if (!mongoURI) {
+      console.error('❌ MONGODB_URI is not defined');
       throw new Error('MONGODB_URI is not defined in environment variables');
     }
 
-    console.log('🔄 Connecting to MongoDB...');
+    console.log('🔄 Attempting MongoDB connection...');
+    console.log('📍 URI format check:', mongoURI.substring(0, 20) + '...');
     
-    const connection = await mongoose.connect(mongoURI, {
-      serverSelectionTimeoutMS: 10000, // Increased timeout for Vercel
+    await mongoose.connect(mongoURI, {
+      serverSelectionTimeoutMS: 15000,
       socketTimeoutMS: 45000,
-      maxPoolSize: 10, // Connection pooling
-      minPoolSize: 2,
+      maxPoolSize: 10,
+      minPoolSize: 1,
+      retryWrites: true,
+      retryReads: true,
     });
 
     console.log('✅ MongoDB Connected Successfully');
     console.log(`📊 Database: ${mongoose.connection.name}`);
-    
-    cachedConnection = connection;
     
     // Verify email service (non-blocking)
     verifyEmailService().catch(err => 
       console.warn('⚠️ Email service verification failed:', err.message)
     );
     
-    return connection;
   } catch (error: any) {
     console.error('❌ MongoDB Connection Error:', error.message);
-    cachedConnection = null;
+    console.error('❌ Error name:', error.name);
+    console.error('❌ Full error:', error);
     throw error;
+  } finally {
+    isConnecting = false;
   }
 };
 
@@ -134,7 +147,6 @@ const verifyEmailService = async () => {
 app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
   console.error('❌ Error:', err.message);
   
-  // Mongoose validation error
   if (err.name === 'ValidationError') {
     return res.status(400).json({
       success: false,
@@ -144,7 +156,6 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     });
   }
   
-  // Mongoose duplicate key error
   if (err.code === 11000) {
     return res.status(400).json({
       success: false,
@@ -153,7 +164,6 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     });
   }
   
-  // JWT errors
   if (err.name === 'JsonWebTokenError') {
     return res.status(401).json({
       success: false,
@@ -170,7 +180,6 @@ app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     });
   }
   
-  // Default error response
   res.status(err.status || 500).json({
     success: false,
     error: err.message || 'Internal Server Error',
@@ -187,22 +196,20 @@ app.use((_req: Request, res: Response) => {
   });
 });
 
-// Removed - connection now handled in the handler wrapper
-
-// Wrap app with database connection middleware
+// Handler for Vercel
 const handler = async (req: any, res: any) => {
   try {
+    // Connect to DB on each request (with built-in caching via mongoose)
     await connectDB();
     return app(req, res);
-  } catch (error) {
-    console.error('Database connection failed:', error);
+  } catch (error: any) {
+    console.error('❌ Handler error:', error);
     return res.status(500).json({
       success: false,
       error: 'Database connection failed',
-      message: 'Unable to connect to database'
+      message: error.message || 'Unable to connect to database'
     });
   }
 };
 
-// Export for Vercel serverless
 export default handler;
