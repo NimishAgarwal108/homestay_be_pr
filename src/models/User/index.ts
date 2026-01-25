@@ -11,7 +11,8 @@ import './queryHelpers';
 import './validators';
 
 // Export interfaces for use in other files
-export { IUser, IUserModel } from './interfaces';
+// ✅ FIXED: Added 'type' keyword here
+export type { IUser, IUserModel } from './interfaces';
 
 // Export the model
 export default mongoose.model<IUser, IUserModel>('User', userSchema);
