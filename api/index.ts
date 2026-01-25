@@ -87,9 +87,13 @@ const connectDB = async () => {
       throw new Error('MONGODB_URI is not defined in environment variables');
     }
 
+    console.log('🔄 Connecting to MongoDB...');
+    
     const connection = await mongoose.connect(mongoURI, {
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 10000, // Increased timeout for Vercel
       socketTimeoutMS: 45000,
+      maxPoolSize: 10, // Connection pooling
+      minPoolSize: 2,
     });
 
     console.log('✅ MongoDB Connected Successfully');
@@ -103,8 +107,8 @@ const connectDB = async () => {
     );
     
     return connection;
-  } catch (error) {
-    console.error('❌ MongoDB Connection Error:', error);
+  } catch (error: any) {
+    console.error('❌ MongoDB Connection Error:', error.message);
     cachedConnection = null;
     throw error;
   }
@@ -183,15 +187,22 @@ app.use((_req: Request, res: Response) => {
   });
 });
 
-// Connect to database before handling requests
-app.use(async (_req: Request, _res: Response, next: NextFunction) => {
+// Removed - connection now handled in the handler wrapper
+
+// Wrap app with database connection middleware
+const handler = async (req: any, res: any) => {
   try {
     await connectDB();
-    next();
+    return app(req, res);
   } catch (error) {
-    next(error);
+    console.error('Database connection failed:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Database connection failed',
+      message: 'Unable to connect to database'
+    });
   }
-});
+};
 
 // Export for Vercel serverless
-export default app;
+export default handler;
