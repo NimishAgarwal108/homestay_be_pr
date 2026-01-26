@@ -7,6 +7,7 @@ export interface IRoom extends Document {
   description?: string;
   price: number;
   capacity: number;
+  totalRooms: number; // ✅ NEW: Total number of physical rooms of this type
   amenities: string[];
   images: string[];
   isAvailable: boolean;
@@ -40,6 +41,12 @@ const roomSchema = new Schema<IRoom>({
     type: Number,
     required: [true, 'Room capacity is required'],
     min: [1, 'Capacity must be at least 1']
+  },
+  totalRooms: { // ✅ NEW FIELD
+    type: Number,
+    required: [true, 'Total number of rooms is required'],
+    min: [1, 'Must have at least 1 room'],
+    default: 1
   },
   amenities: {
     type: [String],

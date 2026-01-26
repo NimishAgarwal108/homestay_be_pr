@@ -12,4 +12,3 @@ export {
   cancelBooking 
 } from './updateBookingController';
 export { deleteBooking } from './deleteBookingController';
-export { checkAvailability } from './checkAvailabilityController';

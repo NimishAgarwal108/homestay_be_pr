@@ -6,30 +6,18 @@ import {
   updateBooking,
   cancelBooking,
   deleteBooking,
-  getMyBookings,
-  checkAvailability
+  getMyBookings
 } from '../controllers/booking';
 import { protect, authorize } from '../middleware/authMiddleware';
 import { adminAuth } from '../middleware/adminAuth';
 import { validateRequest } from '../middleware/validateRequest';
 import {
   createBookingSchema,
-  updateBookingSchema,
-  checkAvailabilitySchema
+  updateBookingSchema
+
 } from '../validators/bookingValidator';
 
 const router = express.Router();
-
-/**
- * @route   POST /api/bookings/check-availability
- * @desc    Check room availability
- * @access  Public
- */
-router.post(
-  '/check-availability',
-  validateRequest(checkAvailabilitySchema),
-  checkAvailability
-);
 
 /**
  * @route   GET /api/bookings/my-bookings

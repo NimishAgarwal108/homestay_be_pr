@@ -3,7 +3,7 @@ import Room from '../../models/Room';
 import Booking from '../../models/Booking';
 
 /**
- * @desc    Get room availability calendar (30 days)
+ * @desc    Get room availability calendar (30 days) with available room count
  * @route   GET /api/rooms/:id/availability-calendar
  * @access  Public
  */
@@ -39,55 +39,51 @@ export const getRoomAvailability = async (req: Request, res: Response): Promise<
     }).select('checkIn checkOut status bookingReference');
 
     console.log(`📅 Found ${bookings.length} bookings for room ${roomId}`);
-    bookings.forEach(booking => {
-      console.log(`  - ${booking.bookingReference}: ${booking.checkIn.toISOString().split('T')[0]} to ${booking.checkOut.toISOString().split('T')[0]}`);
-    });
 
-    const bookedDates = new Set<string>();
+    // ✅ FIXED: Count number of ROOMS booked, not just bookings
+    const bookingsPerDate = new Map<string, number>();
 
-    // ✅ FIX: Create a NEW Date object in each iteration
     bookings.forEach(booking => {
       const checkIn = new Date(booking.checkIn);
       const checkOut = new Date(booking.checkOut);
+      const roomsBooked = booking.numberOfRooms || 1; // ✅ NEW: Get number of rooms in this booking
       
-      // Create a new Date object for the current day
       const currentDate = new Date(checkIn);
       
-      // Loop through each day in the booking range
       while (currentDate < checkOut) {
-        bookedDates.add(currentDate.toISOString().split('T')[0]);
-        // Create a NEW date for the next iteration
+        const dateString = currentDate.toISOString().split('T')[0];
+        const count = (bookingsPerDate.get(dateString) || 0) + roomsBooked; // ✅ Add rooms, not just 1
+        bookingsPerDate.set(dateString, count);
         currentDate.setDate(currentDate.getDate() + 1);
       }
     });
 
-    console.log(`🔴 Total booked dates: ${bookedDates.size}`);
-    if (bookedDates.size > 0) {
-      console.log('🔴 Booked dates:', Array.from(bookedDates).sort());
-    }
+    console.log(`🔴 Dates with bookings:`, Array.from(bookingsPerDate.entries()));
 
     const availability = [];
     const calendarDate = new Date(start);
     
-    // ✅ FIX: Create new Date object for calendar generation too
     while (calendarDate <= end) {
       const dateString = calendarDate.toISOString().split('T')[0];
+      const bookedCount = bookingsPerDate.get(dateString) || 0;
+      const availableCount = room.totalRooms - bookedCount;
+      
       availability.push({
         date: dateString,
-        available: !bookedDates.has(dateString)
+        available: availableCount > 0,
+        availableRooms: availableCount, // ✅ NEW: Show how many rooms available
+        totalRooms: room.totalRooms // ✅ NEW: Show total rooms
       });
       calendarDate.setDate(calendarDate.getDate() + 1);
     }
 
     console.log(`📊 Generated ${availability.length} days of availability`);
-    const availableCount = availability.filter(d => d.available).length;
-    const bookedCount = availability.filter(d => !d.available).length;
-    console.log(`✅ Available: ${availableCount}, ❌ Booked: ${bookedCount}`);
 
     res.status(200).json({
       success: true,
       roomId,
       roomName: room.name,
+      totalRooms: room.totalRooms, // ✅ NEW
       startDate: start.toISOString().split('T')[0],
       endDate: end.toISOString().split('T')[0],
       availability
@@ -103,7 +99,7 @@ export const getRoomAvailability = async (req: Request, res: Response): Promise<
 };
 
 /**
- * @desc    Check if specific dates are available for a room
+ * @desc    Check if specific dates are available for a room (with available room count)
  * @route   GET /api/rooms/:id/check-dates
  * @access  Public
  */
@@ -128,12 +124,19 @@ export const checkDateAvailability = async (req: Request, res: Response): Promis
     });
     
     if (!room) {
+      console.log('❌ Room not found or not available:', roomId);
       res.status(404).json({
         success: false,
         message: 'Room not found or not available'
       });
       return;
     }
+
+    console.log('✅ Room found:', {
+      name: room.name,
+      totalRooms: room.totalRooms,
+      _id: room._id
+    });
 
     const checkInStr = checkInDate as string;
     const checkOutStr = checkOutDate as string;
@@ -154,39 +157,71 @@ export const checkDateAvailability = async (req: Request, res: Response): Promis
     const checkInDateObj = new Date(checkInStr + 'T00:00:00.000Z');
     const checkOutDateObj = new Date(checkOutStr + 'T00:00:00.000Z');
 
-    const conflictingBooking = await Booking.findOne({
+    // ✅ NEW: Count how many rooms are booked for this date range
+    const bookingsInRange = await Booking.find({
       room: roomId,
       status: { $in: ['pending', 'confirmed'] },
       checkIn: { $lt: checkOutDateObj },
       checkOut: { $gt: checkInDateObj }
     });
 
-    if (conflictingBooking) {
-      console.log('❌ Found conflicting booking:', {
-        id: conflictingBooking._id,
-        checkIn: conflictingBooking.checkIn,
-        checkOut: conflictingBooking.checkOut,
-        status: conflictingBooking.status
-      });
-    } else {
-      console.log('✅ No conflicts found - dates are available');
-    }
+    console.log(`📋 Found ${bookingsInRange.length} bookings in range`);
 
-    const isAvailable = !conflictingBooking;
+    // ✅ FIXED: Count number of ROOMS booked, not just bookings
+    const bookingsPerDate = new Map<string, number>();
+    
+    bookingsInRange.forEach(booking => {
+      const checkIn = new Date(booking.checkIn);
+      const checkOut = new Date(booking.checkOut);
+      const roomsBooked = booking.numberOfRooms || 1; // ✅ NEW: Get number of rooms in this booking
+      
+      const currentDate = new Date(checkIn);
+      
+      while (currentDate < checkOut) {
+        const dateString = currentDate.toISOString().split('T')[0];
+        const count = (bookingsPerDate.get(dateString) || 0) + roomsBooked; // ✅ Add rooms, not just 1
+        bookingsPerDate.set(dateString, count);
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    });
+
+    // ✅ FIXED: Handle empty bookingsPerDate correctly
+    const maxBookedRooms = bookingsPerDate.size > 0 
+      ? Math.max(...Array.from(bookingsPerDate.values())) 
+      : 0;
+    const availableRooms = Math.max(0, room.totalRooms - maxBookedRooms); // Ensure never negative
+
+    console.log('📊 Availability calculation:', {
+      roomName: room.name,
+      totalRooms: room.totalRooms,
+      maxBookedRooms,
+      availableRooms,
+      bookingsInRange: bookingsInRange.length,
+      datesWithBookings: Array.from(bookingsPerDate.entries())
+    });
+
+    const isAvailable = availableRooms > 0;
+
+    const responseData = {
+      available: isAvailable,
+      availableRooms, // ✅ How many rooms are available
+      totalRooms: room.totalRooms, // ✅ Total rooms
+      bookedRooms: maxBookedRooms, // ✅ How many are booked
+      message: isAvailable 
+        ? `${availableRooms} of ${room.totalRooms} rooms available for selected dates` 
+        : 'No rooms available for selected dates',
+      conflictingBooking: bookingsInRange.length > 0 ? {
+        checkIn: bookingsInRange[0].checkIn,
+        checkOut: bookingsInRange[0].checkOut,
+        status: bookingsInRange[0].status
+      } : null
+    };
+
+    console.log('✅ Sending response:', responseData);
 
     res.status(200).json({
       success: true,
-      data: {
-        available: isAvailable,
-        message: isAvailable 
-          ? 'Room is available for selected dates' 
-          : 'Room is not available for selected dates',
-        conflictingBooking: conflictingBooking ? {
-          checkIn: conflictingBooking.checkIn,
-          checkOut: conflictingBooking.checkOut,
-          status: conflictingBooking.status
-        } : null
-      }
+      data: responseData
     });
 
   } catch (error: any) {

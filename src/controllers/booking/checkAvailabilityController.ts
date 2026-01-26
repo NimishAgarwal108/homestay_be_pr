@@ -1,146 +1,228 @@
-// src/controllers/booking/checkAvailabilityController.ts
 import { Request, Response } from 'express';
-import { BookingValidationService } from '../../services/bookingValidationService';
-import { BookingPricingService } from '../../services/bookingPricingService';
+import Room from '../../models/Room';
+import Booking from '../../models/Booking';
 
 /**
- * @desc    Check room availability and calculate pricing
- * @route   POST /api/bookings/check-availability
+ * @desc    Get room availability calendar (30 days) with available room count
+ * @route   GET /api/rooms/:id/availability-calendar
  * @access  Public
  */
-export const checkAvailability = async (req: Request, res: Response): Promise<void> => {
+export const getRoomAvailability = async (req: Request, res: Response): Promise<void> => {
   try {
-    // ✅ ADD CACHE HEADERS
-    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
+    const { id: roomId } = req.params;
+    const { startDate } = req.query;
 
-    const { roomId, checkIn, checkOut, guests } = req.body;
-
-    // Validate required fields
-    if (!roomId || !checkIn || !checkOut) {
-      res.status(400).json({
+    const room = await Room.findOne({ 
+      _id: roomId,
+      isAvailable: true 
+    });
+    
+    if (!room) {
+      res.status(404).json({
         success: false,
-        message: 'Please provide roomId, checkIn, and checkOut dates'
+        message: 'Room not found or not available'
       });
       return;
     }
 
-    // Validate room exists and is available
-    const roomValidation = await BookingValidationService.validateRoom(roomId);
-    if (!roomValidation.isValid) {
-      if (roomValidation.statusCode === 404) {
-        res.status(404).json({
-          success: false,
-          message: roomValidation.error
-        });
-        return;
+    const start = startDate ? new Date(startDate as string) : new Date();
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(start);
+    end.setDate(end.getDate() + 30);
+
+    const bookings = await Booking.find({
+      room: roomId,
+      status: { $in: ['pending', 'confirmed'] },
+      checkIn: { $lt: end },
+      checkOut: { $gt: start }
+    }).select('checkIn checkOut status bookingReference');
+
+    console.log(`📅 Found ${bookings.length} bookings for room ${roomId}`);
+
+    // ✅ NEW: Count bookings per date
+    const bookingsPerDate = new Map<string, number>();
+
+    bookings.forEach(booking => {
+      const checkIn = new Date(booking.checkIn);
+      const checkOut = new Date(booking.checkOut);
+      
+      const currentDate = new Date(checkIn);
+      
+      while (currentDate < checkOut) {
+        const dateString = currentDate.toISOString().split('T')[0];
+        bookingsPerDate.set(dateString, (bookingsPerDate.get(dateString) || 0) + 1);
+        currentDate.setDate(currentDate.getDate() + 1);
       }
-
-      // Room exists but is disabled
-      res.status(200).json({
-        success: true,
-        available: false,
-        message: 'This room is currently disabled',
-        room: {
-          id: roomValidation.room?._id,
-          name: roomValidation.room?.name,
-          type: roomValidation.room?.type
-        }
-      });
-      return;
-    }
-
-    const room = roomValidation.room;
-
-    // Validate guest capacity (if provided)
-    if (guests) {
-      const capacityValidation = BookingValidationService.validateGuestCapacity(
-        Number(guests),
-        room.capacity
-      );
-
-      if (!capacityValidation.isValid) {
-        res.status(200).json({
-          success: true,
-          available: false,
-          message: capacityValidation.error,
-          room: {
-            id: room._id,
-            name: room.name,
-            capacity: room.capacity
-          }
-        });
-        return;
-      }
-    }
-
-    // Validate dates
-    const dateValidation = BookingValidationService.validateDates({ checkIn, checkOut });
-    if (!dateValidation.isValid) {
-      BookingValidationService.sendValidationError(res, dateValidation);
-      return;
-    }
-
-    const { checkInDate, checkOutDate } = dateValidation;
-
-    // Check for booking conflicts
-    const conflictCheck = await BookingValidationService.checkBookingConflict({
-      roomId,
-      checkInDate: checkInDate!,
-      checkOutDate: checkOutDate!
     });
 
-    if (conflictCheck.hasConflict) {
-      res.status(200).json({
-        success: true,
-        available: false,
-        message: 'Room is not available for selected dates',
-        conflictingBooking: {
-          checkIn: conflictCheck.conflictingBooking.checkIn,
-          checkOut: conflictCheck.conflictingBooking.checkOut,
-          bookingReference: conflictCheck.conflictingBooking.bookingReference
-        },
-        room: {
-          id: room._id,
-          name: room.name,
-          type: room.type
-        }
+    console.log(`🔴 Dates with bookings:`, Array.from(bookingsPerDate.entries()));
+
+    const availability = [];
+    const calendarDate = new Date(start);
+    
+    while (calendarDate <= end) {
+      const dateString = calendarDate.toISOString().split('T')[0];
+      const bookedCount = bookingsPerDate.get(dateString) || 0;
+      const availableCount = room.totalRooms - bookedCount;
+      
+      availability.push({
+        date: dateString,
+        available: availableCount > 0,
+        availableRooms: availableCount, // ✅ NEW: Show how many rooms available
+        totalRooms: room.totalRooms // ✅ NEW: Show total rooms
       });
-      return;
+      calendarDate.setDate(calendarDate.getDate() + 1);
     }
 
-    // Calculate pricing
-    const pricing = BookingPricingService.calculatePricing({
-      checkInDate: checkInDate!,
-      checkOutDate: checkOutDate!,
-      pricePerNight: room.price
-    });
+    console.log(`📊 Generated ${availability.length} days of availability`);
 
-    console.log('✅ Room is available - returning pricing');
-
-    // Room is available - return availability with pricing
     res.status(200).json({
       success: true,
-      available: true,
-      message: 'Room is available for selected dates',
-      room: {
-        id: room._id,
-        name: room.name,
-        type: room.type,
-        price: room.price,
-        capacity: room.capacity,
-        images: room.images?.[0] || null
-      },
-      pricing: BookingPricingService.formatPricingResponse(pricing),
-      dates: {
-        checkIn: checkInDate!.toISOString().split('T')[0],
-        checkOut: checkOutDate!.toISOString().split('T')[0]
-      }
+      roomId,
+      roomName: room.name,
+      totalRooms: room.totalRooms, // ✅ NEW
+      startDate: start.toISOString().split('T')[0],
+      endDate: end.toISOString().split('T')[0],
+      availability
     });
 
   } catch (error: any) {
-    console.error('Check availability error:', error);
+    console.error('❌ Error fetching room availability:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Error fetching room availability'
+    });
+  }
+};
+
+/**
+ * @desc    Check if specific dates are available for a room (with available room count)
+ * @route   GET /api/rooms/:id/check-dates
+ * @access  Public
+ */
+export const checkDateAvailability = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id: roomId } = req.params;
+    const { checkInDate, checkOutDate } = req.query;
+
+    console.log('🔍 Checking availability:', { roomId, checkInDate, checkOutDate });
+
+    if (!checkInDate || !checkOutDate) {
+      res.status(400).json({
+        success: false,
+        message: 'Check-in and check-out dates are required'
+      });
+      return;
+    }
+
+    const room = await Room.findOne({ 
+      _id: roomId,
+      isAvailable: true 
+    });
+    
+    if (!room) {
+      console.log('❌ Room not found or not available:', roomId);
+      res.status(404).json({
+        success: false,
+        message: 'Room not found or not available'
+      });
+      return;
+    }
+
+    console.log('✅ Room found:', {
+      name: room.name,
+      totalRooms: room.totalRooms,
+      _id: room._id
+    });
+
+    const checkInStr = checkInDate as string;
+    const checkOutStr = checkOutDate as string;
+
+    console.log('📅 Date strings:', {
+      checkIn: checkInStr,
+      checkOut: checkOutStr
+    });
+
+    if (checkOutStr <= checkInStr) {
+      res.status(400).json({
+        success: false,
+        message: 'Check-out date must be after check-in date'
+      });
+      return;
+    }
+
+    const checkInDateObj = new Date(checkInStr + 'T00:00:00.000Z');
+    const checkOutDateObj = new Date(checkOutStr + 'T00:00:00.000Z');
+
+    // ✅ NEW: Count how many rooms are booked for this date range
+    const bookingsInRange = await Booking.find({
+      room: roomId,
+      status: { $in: ['pending', 'confirmed'] },
+      checkIn: { $lt: checkOutDateObj },
+      checkOut: { $gt: checkInDateObj }
+    });
+
+    console.log(`📋 Found ${bookingsInRange.length} bookings in range`);
+
+    // ✅ NEW: Find the maximum number of bookings on any single day
+    const bookingsPerDate = new Map<string, number>();
+    
+    bookingsInRange.forEach(booking => {
+      const checkIn = new Date(booking.checkIn);
+      const checkOut = new Date(booking.checkOut);
+      
+      const currentDate = new Date(checkIn);
+      
+      while (currentDate < checkOut) {
+        const dateString = currentDate.toISOString().split('T')[0];
+        const count = (bookingsPerDate.get(dateString) || 0) + 1;
+        bookingsPerDate.set(dateString, count);
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    });
+
+    // ✅ FIXED: Handle empty bookingsPerDate correctly
+    const maxBookedRooms = bookingsPerDate.size > 0 
+      ? Math.max(...Array.from(bookingsPerDate.values())) 
+      : 0;
+    const availableRooms = Math.max(0, room.totalRooms - maxBookedRooms); // Ensure never negative
+
+    console.log('📊 Availability calculation:', {
+      roomName: room.name,
+      totalRooms: room.totalRooms,
+      maxBookedRooms,
+      availableRooms,
+      bookingsInRange: bookingsInRange.length,
+      datesWithBookings: Array.from(bookingsPerDate.entries())
+    });
+
+    const isAvailable = availableRooms > 0;
+
+    const responseData = {
+      available: isAvailable,
+      availableRooms, // ✅ How many rooms are available
+      totalRooms: room.totalRooms, // ✅ Total rooms
+      bookedRooms: maxBookedRooms, // ✅ How many are booked
+      message: isAvailable 
+        ? `${availableRooms} of ${room.totalRooms} rooms available for selected dates` 
+        : 'No rooms available for selected dates',
+      conflictingBooking: bookingsInRange.length > 0 ? {
+        checkIn: bookingsInRange[0].checkIn,
+        checkOut: bookingsInRange[0].checkOut,
+        status: bookingsInRange[0].status
+      } : null
+    };
+
+    console.log('✅ Sending response:', responseData);
+
+    res.status(200).json({
+      success: true,
+      data: responseData
+    });
+
+  } catch (error: any) {
+    console.error('❌ Error checking date availability:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Error checking availability'

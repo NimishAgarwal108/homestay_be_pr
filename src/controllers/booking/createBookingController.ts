@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { BookingValidationService } from '../../services/bookingValidationService';
 import { BookingService } from '../../services/bookingService';
 import { MAX_ROOMS_PER_TYPE } from '../../validators/bookingValidator';
+import Booking from '../../models/Booking';
 
 export const createBooking = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -124,25 +125,70 @@ export const createBooking = async (req: Request, res: Response): Promise<void> 
     const checkInDate = new Date(checkIn);
     const checkOutDate = new Date(checkOut);
 
-    // ✅ Check for booking conflicts
-    const conflictCheck = await BookingValidationService.checkBookingConflict({
-      roomId,
-      checkInDate,
-      checkOutDate
+    // ✅ UPDATED: Check if enough rooms are available (not just conflict check)
+    const existingBookings = await Booking.find({
+      room: roomId,
+      status: { $in: ['pending', 'confirmed'] },
+      checkIn: { $lt: checkOutDate },
+      checkOut: { $gt: checkInDate }
     });
 
-    if (conflictCheck.hasConflict) {
+    console.log(`📋 Found ${existingBookings.length} existing bookings for date range`);
+
+    // ✅ Calculate how many rooms are already booked per date
+    const bookingsPerDate = new Map<string, number>();
+    
+    existingBookings.forEach(booking => {
+      const bCheckIn = new Date(booking.checkIn);
+      const bCheckOut = new Date(booking.checkOut);
+      const roomsBooked = booking.numberOfRooms || 1;
+      
+      const currentDate = new Date(bCheckIn);
+      
+      while (currentDate < bCheckOut) {
+        const dateString = currentDate.toISOString().split('T')[0];
+        const count = (bookingsPerDate.get(dateString) || 0) + roomsBooked;
+        bookingsPerDate.set(dateString, count);
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    });
+
+    // Find the maximum number of rooms booked on any single day
+    const maxBookedRooms = bookingsPerDate.size > 0 
+      ? Math.max(...Array.from(bookingsPerDate.values())) 
+      : 0;
+    
+    const availableRooms = room.totalRooms - maxBookedRooms;
+
+    console.log('📊 Availability check for booking:', {
+      roomName: room.name,
+      totalRooms: room.totalRooms,
+      maxBookedRooms,
+      availableRooms,
+      requestedRooms: numberOfRooms,
+      datesWithBookings: Array.from(bookingsPerDate.entries())
+    });
+
+    // ✅ Check if enough rooms are available
+    if (availableRooms < numberOfRooms) {
+      console.log('❌ Not enough rooms available');
       res.status(400).json({
         success: false,
-        message: 'Room is not available for selected dates. Please choose different dates.',
-        conflictingBooking: {
-          checkIn: conflictCheck.conflictingBooking.checkIn,
-          checkOut: conflictCheck.conflictingBooking.checkOut,
-          bookingReference: conflictCheck.conflictingBooking.bookingReference
-        }
+        message: availableRooms === 0 
+          ? 'No rooms available for selected dates. Please choose different dates.'
+          : `Only ${availableRooms} room(s) available for selected dates. You're trying to book ${numberOfRooms}.`,
+        availableRooms,
+        requestedRooms: numberOfRooms,
+        conflictingBooking: existingBookings.length > 0 ? {
+          checkIn: existingBookings[0].checkIn,
+          checkOut: existingBookings[0].checkOut,
+          bookingReference: existingBookings[0].bookingReference
+        } : null
       });
       return;
     }
+
+    console.log('✅ Sufficient rooms available, proceeding with booking');
 
     // ✅ Create booking with all validated data
     const booking = await BookingService.createBooking({
