@@ -25,6 +25,15 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// ✅ ADD THIS: Disable caching for all API responses
+app.use((req: Request, res: Response, next: NextFunction) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+  next();
+});
+
 // Request logging
 app.use((req: Request, _res: Response, next: NextFunction) => {
   console.log(`${req.method} ${req.path}`);

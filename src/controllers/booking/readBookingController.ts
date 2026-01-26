@@ -9,6 +9,11 @@ import { BookingService } from '../../services/bookingService';
  */
 export const getAllBookings = async (req: Request, res: Response): Promise<void> => {
   try {
+    // ✅ ADD CACHE HEADERS
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     const { status, startDate, endDate, roomId } = req.query;
 
     const bookings = await BookingService.getAllBookings({
@@ -39,6 +44,11 @@ export const getAllBookings = async (req: Request, res: Response): Promise<void>
  */
 export const getBookingById = async (req: Request, res: Response): Promise<void> => {
   try {
+    // ✅ ADD CACHE HEADERS
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     const booking = await BookingService.getBookingById(req.params.id);
 
     if (!booking) {
@@ -69,6 +79,11 @@ export const getBookingById = async (req: Request, res: Response): Promise<void>
  */
 export const getMyBookings = async (req: Request, res: Response): Promise<void> => {
   try {
+    // ✅ ADD CACHE HEADERS
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     const userId = (req as any).user?.id;
 
     if (!userId) {

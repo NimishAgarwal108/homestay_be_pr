@@ -5,6 +5,11 @@ import { MAX_ROOMS_PER_TYPE } from '../../validators/bookingValidator';
 
 export const createBooking = async (req: Request, res: Response): Promise<void> => {
   try {
+    // ✅ ADD CACHE HEADERS
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     const {
       room: roomId,
       checkIn,

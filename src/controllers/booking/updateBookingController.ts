@@ -11,6 +11,11 @@ import Booking from '../../models/Booking';
  */
 export const updateBooking = async (req: Request, res: Response): Promise<void> => {
   try {
+    // ✅ ADD CACHE HEADERS
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     const booking = await Booking.findById(req.params.id);
 
     if (!booking) {
@@ -75,6 +80,11 @@ export const updateBooking = async (req: Request, res: Response): Promise<void> 
  */
 export const cancelBooking = async (req: Request, res: Response): Promise<void> => {
   try {
+    // ✅ ADD CACHE HEADERS
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     const userId = (req as any).user?.id;
     const reason = req.body.reason;
 
