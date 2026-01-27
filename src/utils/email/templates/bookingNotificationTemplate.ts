@@ -22,7 +22,7 @@ export const bookingNotificationTemplate = (data: BookingEmailData): string => {
   const {
     bookingReference,
     guestName,
-    guestEmail,
+    guestEmail, // ✅ Still in interface for backend use, just not displayed in email
     guestPhone,
     roomName,
     checkIn,
@@ -148,10 +148,7 @@ export const bookingNotificationTemplate = (data: BookingEmailData): string => {
           <span class="detail-value">${guestName}</span>
         </div>
 
-        <div class="detail-row">
-          <span class="detail-label">📧 Email:</span>
-          <span class="detail-value">${guestEmail}</span>
-        </div>
+        <!-- ✅ REMOVED: Email line no longer displayed in admin notification -->
 
         <div class="detail-row">
           <span class="detail-label">📱 Phone:</span>
@@ -218,7 +215,7 @@ export const bookingNotificationTemplate = (data: BookingEmailData): string => {
             : ""
         }
 
-        <!-- ✅ NEW: Price Breakdown with Base + GST -->
+        <!-- ✅ Price Breakdown with Base + GST (18%) -->
         <div class="price-breakdown">
           <h3 style="margin: 0 0 15px 0; color: #1976d2;">💰 Payment Summary</h3>
           
