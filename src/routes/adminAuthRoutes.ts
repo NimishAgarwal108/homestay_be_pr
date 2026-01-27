@@ -4,13 +4,18 @@ import {
   adminLogin,
   getAdminProfile,
   changeAdminPassword,
+  verifySession,
+  logoutAdmin,
+} from '../controllers/adminAuthController';
+
+// ✅ Import forgot password functions from the correct file
+import {
   forgotPassword,
   verifyOTP,
   resetPassword,
   resendOTP,
-  verifySession,
-  logoutAdmin,
-} from '../controllers/adminAuthController';
+} from '../controllers/auth/forgotPasswordController';
+
 import { adminAuth } from '../middleware/adminAuth';
 
 const router = express.Router();

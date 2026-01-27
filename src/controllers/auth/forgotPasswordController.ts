@@ -2,214 +2,308 @@
 import { Request, Response } from 'express';
 import Admin from '../../models/Admin';
 import { otpService } from '../../services/otpService';
-import { tokenService } from '../../services/tokenService';
-import { sendPasswordResetOTP, resendPasswordResetOTP } from '../../utils/emailService';
+import { sendPasswordResetOTP } from '../../utils/emailService';
+import crypto from 'crypto';
 
-export const forgotPassword = async (req: Request, res: Response) => {
-  console.log('🟢 ========== FORGOT PASSWORD CALLED ==========');
-  console.log('🟢 Body:', req.body);
-  
+// Temporary storage for reset tokens (in production, use Redis or DB)
+const resetTokenStore = new Map<string, { email: string; expiresAt: number }>();
+
+/**
+ * @desc    Send OTP to admin email for password reset
+ * @route   POST /api/admin/auth/forgot-password
+ * @access  Public
+ */
+export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email } = req.body;
 
+    console.log('🔐 Forgot password request for:', email);
+
     if (!email) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Email is required' 
+      res.status(400).json({
+        success: false,
+        message: 'Email is required'
       });
+      return;
     }
 
-    const admin = await Admin.findOne({ email });
+    // Check if admin exists
+    const admin = await Admin.findOne({ email: email.toLowerCase() });
+
     if (!admin) {
-      return res.status(200).json({
+      // Don't reveal if email exists for security
+      res.status(200).json({
         success: true,
-        message: 'If the email exists, an OTP has been sent',
+        message: 'If an account exists with this email, you will receive an OTP shortly'
       });
+      return;
     }
 
     if (!admin.isActive) {
-      return res.status(403).json({
+      res.status(403).json({
         success: false,
-        message: 'Admin account is deactivated. Contact system administrator.',
+        message: 'This account has been deactivated'
       });
+      return;
     }
 
+    // Generate OTP
     const otp = otpService.generateOTP();
-    otpService.storeOTP(email, otp);
+    otpService.storeOTP(email, otp, 10); // 10 minutes expiry
 
+    // Send OTP via email
     try {
-      await sendPasswordResetOTP(email, admin.name, otp);
+      await sendPasswordResetOTP({
+        email: admin.email,
+        name: admin.name,
+        otp
+      });
+
+      console.log('✅ OTP sent successfully to:', email);
+
+      res.status(200).json({
+        success: true,
+        message: 'OTP sent to your email address'
+      });
     } catch (emailError) {
-      console.error('❌ Email sending error:', emailError);
-      return res.status(500).json({
+      console.error('❌ Failed to send OTP email:', emailError);
+      res.status(500).json({
         success: false,
-        message: 'Failed to send OTP email. Please try again.',
+        message: 'Failed to send OTP. Please try again later.'
       });
     }
 
-    res.status(200).json({
-      success: true,
-      message: 'OTP sent to your email',
-    });
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Forgot password error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error. Please try again.' 
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Server error'
     });
   }
 };
 
-export const verifyOTP = async (req: Request, res: Response) => {
-  console.log('🟢 ========== VERIFY OTP CALLED ==========');
-  console.log('🟢 Body:', req.body);
-  
+/**
+ * @desc    Verify OTP and generate reset token
+ * @route   POST /api/admin/auth/verify-otp
+ * @access  Public
+ */
+export const verifyOTP = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email, otp } = req.body;
 
+    console.log('🔍 Verifying OTP for:', email);
+
     if (!email || !otp) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Email and OTP are required' 
+      res.status(400).json({
+        success: false,
+        message: 'Email and OTP are required'
       });
+      return;
     }
 
-    const verification = otpService.verifyOTP(email, otp);
+    // Verify OTP
+    const otpResult = otpService.verifyOTP(email, otp);
 
-    if (!verification.valid) {
-      return res.status(400).json({ 
-        success: false, 
-        message: verification.message 
+    if (!otpResult.valid) {
+      res.status(400).json({
+        success: false,
+        message: otpResult.message
       });
+      return;
     }
 
-    console.log(`✅ OTP verified for ${email}`);
+    // Check if admin exists
+    const admin = await Admin.findOne({ email: email.toLowerCase() });
 
-    const resetToken = tokenService.generateResetToken(email);
+    if (!admin) {
+      res.status(404).json({
+        success: false,
+        message: 'Admin not found'
+      });
+      return;
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes
+
+    // Store reset token
+    resetTokenStore.set(resetToken, {
+      email: admin.email,
+      expiresAt
+    });
+
+    // Clear OTP after successful verification
+    otpService.clearOTP(email);
+
+    console.log('✅ OTP verified, reset token generated for:', email);
 
     res.status(200).json({
       success: true,
       message: 'OTP verified successfully',
-      resetToken,
+      resetToken // Send to frontend to use in reset password
     });
-  } catch (error) {
+
+  } catch (error: any) {
     console.error('❌ Verify OTP error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error. Please try again.' 
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Server error'
     });
   }
 };
 
-export const resetPassword = async (req: Request, res: Response) => {
-  console.log('🟢 ========== RESET PASSWORD CALLED ==========');
-  console.log('🟢 Body:', req.body);
-  
+/**
+ * @desc    Reset password using reset token
+ * @route   POST /api/admin/auth/reset-password
+ * @access  Public (but requires valid reset token)
+ */
+export const resetPassword = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { resetToken, newPassword } = req.body;
+    const { email, resetToken, newPassword } = req.body;
 
-    if (!resetToken || !newPassword) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Reset token and new password are required' 
+    console.log('🔐 Reset password request for:', email);
+
+    if (!email || !resetToken || !newPassword) {
+      res.status(400).json({
+        success: false,
+        message: 'Email, reset token, and new password are required'
       });
+      return;
     }
 
-    const tokenVerification = tokenService.verifyResetToken(resetToken);
+    // Verify reset token
+    const tokenData = resetTokenStore.get(resetToken);
 
-    if (!tokenVerification.valid) {
-      return res.status(400).json({ 
-        success: false, 
-        message: tokenVerification.message 
+    if (!tokenData) {
+      res.status(401).json({
+        success: false,
+        message: 'Invalid or expired reset token'
       });
+      return;
     }
 
-    const admin = await Admin.findOne({ email: tokenVerification.email });
-    if (!admin) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Admin not found' 
+    if (Date.now() > tokenData.expiresAt) {
+      resetTokenStore.delete(resetToken);
+      res.status(401).json({
+        success: false,
+        message: 'Reset token has expired. Please request a new password reset.'
       });
+      return;
     }
 
+    if (tokenData.email !== email.toLowerCase()) {
+      res.status(401).json({
+        success: false,
+        message: 'Invalid reset token for this email'
+      });
+      return;
+    }
+
+    // Password validation
     if (newPassword.length < 8) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Password must be at least 8 characters long' 
+      res.status(400).json({
+        success: false,
+        message: 'Password must be at least 8 characters long'
       });
+      return;
     }
 
+    // Find admin and update password
+    const admin = await Admin.findOne({ email: email.toLowerCase() }).select('+password');
+
+    if (!admin) {
+      res.status(404).json({
+        success: false,
+        message: 'Admin not found'
+      });
+      return;
+    }
+
+    // Update password (will be hashed by pre-save hook)
     admin.password = newPassword;
     await admin.save();
 
-    otpService.clearOTP(tokenVerification.email!);
+    // Clear reset token after successful password reset
+    resetTokenStore.delete(resetToken);
 
-    console.log(`✅ Password reset successful for ${tokenVerification.email}`);
+    console.log('✅ Password reset successful for:', email);
 
     res.status(200).json({
       success: true,
-      message: 'Password reset successfully. You can now login with your new password.',
+      message: 'Password reset successfully. You can now login with your new password.'
     });
-  } catch (error) {
+
+  } catch (error: any) {
     console.error('❌ Reset password error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error. Please try again.' 
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Server error'
     });
   }
 };
 
-export const resendOTP = async (req: Request, res: Response) => {
-  console.log('🟢 ========== RESEND OTP CALLED ==========');
-  console.log('🟢 Body:', req.body);
-  
+/**
+ * @desc    Resend OTP
+ * @route   POST /api/admin/auth/resend-otp
+ * @access  Public
+ */
+export const resendOTP = async (req: Request, res: Response): Promise<void> => {
   try {
     const { email } = req.body;
 
+    console.log('🔄 Resend OTP request for:', email);
+
     if (!email) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Email is required' 
+      res.status(400).json({
+        success: false,
+        message: 'Email is required'
       });
+      return;
     }
 
-    const admin = await Admin.findOne({ email });
+    // Check if admin exists
+    const admin = await Admin.findOne({ email: email.toLowerCase() });
+
     if (!admin) {
-      return res.status(200).json({
+      res.status(200).json({
         success: true,
-        message: 'If the email exists, an OTP has been sent',
+        message: 'If an account exists with this email, you will receive an OTP shortly'
       });
+      return;
     }
 
-    if (!admin.isActive) {
-      return res.status(403).json({
-        success: false,
-        message: 'Admin account is deactivated',
-      });
-    }
-
+    // Generate new OTP
     const otp = otpService.generateOTP();
-    otpService.storeOTP(email, otp);
+    otpService.storeOTP(email, otp, 10); // 10 minutes expiry
 
+    // Send OTP via email
     try {
-      await resendPasswordResetOTP(email, admin.name, otp);
+      await sendPasswordResetOTP({
+        email: admin.email,
+        name: admin.name,
+        otp
+      });
+
+      console.log('✅ OTP resent successfully to:', email);
+
+      res.status(200).json({
+        success: true,
+        message: 'New OTP sent to your email address'
+      });
     } catch (emailError) {
-      console.error('❌ Email sending error:', emailError);
-      return res.status(500).json({
+      console.error('❌ Failed to resend OTP email:', emailError);
+      res.status(500).json({
         success: false,
-        message: 'Failed to send OTP email',
+        message: 'Failed to send OTP. Please try again later.'
       });
     }
 
-    res.status(200).json({
-      success: true,
-      message: 'OTP resent successfully',
-    });
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ Resend OTP error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Server error. Please try again.' 
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Server error'
     });
   }
 };

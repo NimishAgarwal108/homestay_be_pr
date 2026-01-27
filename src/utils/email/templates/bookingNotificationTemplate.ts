@@ -15,7 +15,7 @@ export interface BookingEmailData {
   specialRequests?: string;
 }
 
-export const bookingNotificationTemplate = (data: BookingEmailData): string => {
+export const generateBookingNotificationEmail = (data: BookingEmailData): string => {
   const { 
     bookingReference, 
     guestName, 
