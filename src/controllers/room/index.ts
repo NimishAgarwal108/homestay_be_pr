@@ -5,3 +5,4 @@ export * from './updateRoomController';
 export * from './deleteRoomController';
 export * from './toggleAvailabilityController';
 export * from './checkAvailabilityController';
+export * from './getUnavailableDatesByRoomType'; // ✅ NEW

@@ -11,6 +11,7 @@ import {
   getRoomAvailability,
   checkDateAvailability
 } from '../controllers/room';
+import { getUnavailableDatesByRoomType } from '../controllers/room/getUnavailableDatesByRoomType'; // ✅ NEW
 import { adminAuth } from '../middleware/adminAuth';
 
 const router = express.Router();
@@ -69,6 +70,14 @@ router.get('/:id/availability-calendar', getRoomAvailability);
  * @access  Public
  */
 router.get('/:id/check-dates', checkDateAvailability);
+
+/**
+ * ✅ NEW ROUTE
+ * @route   GET /api/rooms/:id/unavailable-dates
+ * @desc    Get dates where ALL rooms of this type are fully booked
+ * @access  Public
+ */
+router.get('/:id/unavailable-dates', getUnavailableDatesByRoomType);
 
 /**
  * @route   PATCH /api/rooms/:id/toggle-availability
