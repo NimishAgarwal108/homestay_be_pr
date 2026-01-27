@@ -1,9 +1,9 @@
 // src/controllers/booking/createBookingController.ts
 import { Request, Response } from 'express';
-import { BookingValidationService } from '../../services/bookingValidationService';
-import { BookingService } from '../../services/bookingService';
-import { MAX_ROOMS_PER_TYPE } from '../../validators/bookingValidator';
 import Booking from '../../models/Booking';
+import { BookingService } from '../../services/bookingService';
+import { BookingValidationService } from '../../services/bookingValidationService';
+import { MAX_ROOMS_PER_TYPE } from '../../validators/bookingValidator';
 
 export const createBooking = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -25,8 +25,7 @@ export const createBooking = async (req: Request, res: Response): Promise<void> 
       nights,
       pricePerNight,
       totalPrice,
-      taxAmount,
-      discountAmount,
+      gstAmount,
       paymentStatus,
       status,
       specialRequests
@@ -205,8 +204,7 @@ export const createBooking = async (req: Request, res: Response): Promise<void> 
       nights,
       pricePerNight,
       totalPrice,
-      taxAmount,
-      discountAmount,
+      gstAmount, // Changed from taxAmount to gstAmount
       paymentStatus,
       status: 'confirmed',
       specialRequests: specialRequests || ''

@@ -3,9 +3,9 @@
 interface PricingCalculation {
   nights: number;
   pricePerNight: number;
+  numberOfRooms: number;
   basePrice: number;
-  taxAmount: number;
-  discountAmount: number;
+  gstAmount: number;
   totalPrice: number;
 }
 
@@ -13,12 +13,11 @@ interface PricingParams {
   checkInDate: Date;
   checkOutDate: Date;
   pricePerNight: number;
-  discountAmount?: number;
-  taxRate?: number;
+  numberOfRooms: number;
 }
 
 export class BookingPricingService {
-  private static readonly DEFAULT_TAX_RATE = 0.12; // 12%
+  private static readonly GST_RATE = 0.18; // 18% GST (Fixed)
 
   /**
    * Calculate number of nights between two dates
@@ -29,24 +28,38 @@ export class BookingPricingService {
   }
 
   /**
-   * Calculate complete booking pricing
+   * Calculate complete booking pricing - ONLY BASE + 18% GST
    */
   static calculatePricing(params: PricingParams): PricingCalculation {
     const nights = this.calculateNights(params.checkInDate, params.checkOutDate);
     const pricePerNight = params.pricePerNight;
-    const basePrice = pricePerNight * nights;
-    const discountAmount = params.discountAmount || 0;
-    const priceAfterDiscount = basePrice - discountAmount;
-    const taxRate = params.taxRate || this.DEFAULT_TAX_RATE;
-    const taxAmount = Math.round(priceAfterDiscount * taxRate);
-    const totalPrice = priceAfterDiscount + taxAmount;
+    const numberOfRooms = params.numberOfRooms;
+    
+    // Base price calculation
+    const basePrice = pricePerNight * nights * numberOfRooms;
+    
+    // GST calculation (18% of base price)
+    const gstAmount = Math.round(basePrice * this.GST_RATE);
+    
+    // Total = Base + GST (No discounts)
+    const totalPrice = basePrice + gstAmount;
+
+    console.log('💰 Pricing Calculation:', {
+      nights,
+      pricePerNight,
+      numberOfRooms,
+      basePrice,
+      gstAmount,
+      gstRate: '18%',
+      totalPrice
+    });
 
     return {
       nights,
       pricePerNight,
+      numberOfRooms,
       basePrice,
-      taxAmount,
-      discountAmount,
+      gstAmount,
       totalPrice
     };
   }
@@ -58,9 +71,10 @@ export class BookingPricingService {
     return {
       nights: calculation.nights,
       pricePerNight: calculation.pricePerNight,
+      numberOfRooms: calculation.numberOfRooms,
       basePrice: calculation.basePrice,
-      discountAmount: calculation.discountAmount,
-      taxAmount: calculation.taxAmount,
+      gstAmount: calculation.gstAmount,
+      gstRate: '18%',
       totalPrice: calculation.totalPrice
     };
   }
