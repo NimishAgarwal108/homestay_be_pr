@@ -16,8 +16,7 @@ interface CreateBookingData {
   nights: number;
   pricePerNight: number;
   totalPrice: number;
-  taxAmount: number;
-  discountAmount: number;
+  gstAmount: number;
   paymentStatus?: string;
   status?: string;
   specialRequests?: string;
@@ -109,8 +108,8 @@ export class BookingService {
       nights: Number(data.nights),
       pricePerNight: Number(data.pricePerNight),
       totalPrice: Number(data.totalPrice),
-      taxAmount: Number(data.taxAmount) || 0,
-      discountAmount: Number(data.discountAmount) || 0,
+      gstAmount: Number(data.gstAmount) || 0,
+      discountAmount: 0, // Always 0 - no discounts
       paymentStatus: data.paymentStatus || 'pending',
       status: data.status || 'confirmed',
       specialRequests: data.specialRequests?.trim()
@@ -176,10 +175,15 @@ export class BookingService {
 
   /**
    * Send booking notification to EMAIL_USER (aamantranstays@gmail.com)
+   * Shows ONLY base amount + 18% GST
    */
   static async sendBookingNotification(booking: any, room: any) {
     try {
       const adults = booking.guests - (booking.children || 0);
+      
+      // Calculate base price and GST for email display
+      const basePrice = booking.pricePerNight * booking.nights * booking.numberOfRooms;
+      const gstAmount = booking.gstAmount || Math.round(basePrice * 0.18);
       
       await sendBookingNotificationToAdmin({
         bookingReference: booking.bookingReference,
@@ -194,6 +198,9 @@ export class BookingService {
         adults: adults,
         numberOfRooms: booking.numberOfRooms,
         nights: booking.nights,
+        pricePerNight: booking.pricePerNight,
+        basePrice: basePrice,
+        gstAmount: gstAmount,
         totalPrice: booking.totalPrice,
         specialRequests: booking.specialRequests
       });

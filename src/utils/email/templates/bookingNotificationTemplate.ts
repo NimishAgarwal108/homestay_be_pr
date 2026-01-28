@@ -7,30 +7,36 @@ export interface BookingEmailData {
   checkIn: Date;
   checkOut: Date;
   guests: number;
-  children?: number; // ✅ ADDED - Optional field
-  adults?: number; // ✅ ADDED - Optional field
-  numberOfRooms?: number; // ✅ ADDED - Optional field
+  children?: number;
+  adults?: number;
+  numberOfRooms?: number;
   nights: number;
+  pricePerNight?: number;
+  basePrice?: number;
+  gstAmount?: number;
   totalPrice: number;
   specialRequests?: string;
 }
 
 export const bookingNotificationTemplate = (data: BookingEmailData): string => {
-  const { 
-    bookingReference, 
-    guestName, 
-    guestEmail, 
+  const {
+    bookingReference,
+    guestName,
+    guestEmail, // ✅ Still in interface for backend use, just not displayed in email
     guestPhone,
-    roomName, 
-    checkIn, 
-    checkOut, 
+    roomName,
+    checkIn,
+    checkOut,
     guests,
-    children = 0, // ✅ ADDED with default
-    adults = guests, // ✅ ADDED with default
-    numberOfRooms = 1, // ✅ ADDED with default
-    nights, 
+    children = 0,
+    adults = guests,
+    numberOfRooms = 1,
+    nights,
+    pricePerNight = 0,
+    basePrice = 0,
+    gstAmount = 0,
     totalPrice,
-    specialRequests 
+    specialRequests,
   } = data;
 
   return `
@@ -67,6 +73,7 @@ export const bookingNotificationTemplate = (data: BookingEmailData): string => {
         .detail-label {
           font-weight: bold;
           color: #555;
+          margin-right:8px;
         }
         .detail-value {
           color: #333;
@@ -102,6 +109,27 @@ export const bookingNotificationTemplate = (data: BookingEmailData): string => {
           border-radius: 8px;
           margin: 10px 0;
         }
+        .price-breakdown {
+          background: #e3f2fd;
+          padding: 20px;
+          border-radius: 8px;
+          margin: 20px 0;
+          border: 2px solid #2196f3;
+        }
+        .price-row {
+          display: flex;
+          justify-content: space-between;
+          padding: 8px 0;
+          font-size: 16px;
+        }
+        .price-total {
+          border-top: 2px solid #2196f3;
+          margin-top: 10px;
+          padding-top: 10px;
+          font-weight: bold;
+          font-size: 20px;
+          color: #1976d2;
+        }
       </style>
     </head>
     <body>
@@ -121,79 +149,120 @@ export const bookingNotificationTemplate = (data: BookingEmailData): string => {
           <span class="detail-value">${guestName}</span>
         </div>
 
+        <!-- ✅ REMOVED: Email line no longer displayed in admin notification -->
+
         <div class="detail-row">
-          <span class="detail-label">📧 Email:</span>
-          <span class="detail-value">${guestEmail}</span>
+          <span class="detail-label">📱 Phone: </span>
+          <span class="detail-value">
+            <a href="tel:${guestPhone}">${guestPhone}</a>
+          </span>
         </div>
 
         <div class="detail-row">
-          <span class="detail-label">📱 Phone:</span>
-          <span class="detail-value">${guestPhone}</span>
-        </div>
-
-        <div class="detail-row">
-          <span class="detail-label">🏠 Room Type:</span>
+          <span class="detail-label">🏠 Room Type: </span>
           <span class="detail-value">${roomName}</span>
         </div>
 
         <div class="detail-row">
-          <span class="detail-label">🔢 Number of Rooms:</span>
-          <span class="detail-value">${numberOfRooms} room${numberOfRooms > 1 ? 's' : ''}</span>
+          <span class="detail-label">🔢 Number of Rooms: </span>
+          <span class="detail-value">${numberOfRooms} room${numberOfRooms > 1 ? "s" : ""}</span>
         </div>
 
         <div class="detail-row">
-          <span class="detail-label">📅 Check-in:</span>
-          <span class="detail-value">${new Date(checkIn).toLocaleDateString('en-US', { 
-            weekday: 'short', 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric' 
-          })}</span>
+          <span class="detail-label">📅 Check-in: </span>
+          <span class="detail-value">${new Date(checkIn).toLocaleDateString(
+            "en-US",
+            {
+              weekday: "short",
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            },
+          )}</span>
         </div>
 
         <div class="detail-row">
-          <span class="detail-label">📅 Check-out:</span>
-          <span class="detail-value">${new Date(checkOut).toLocaleDateString('en-US', { 
-            weekday: 'short', 
-            year: 'numeric', 
-            month: 'short', 
-            day: 'numeric' 
-          })}</span>
+          <span class="detail-label">📅 Check-out: </span>
+          <span class="detail-value">${new Date(checkOut).toLocaleDateString(
+            "en-US",
+            {
+              weekday: "short",
+              year: "numeric",
+              month: "short",
+              day: "numeric",
+            },
+          )}</span>
         </div>
 
         <div class="detail-row">
-          <span class="detail-label">🌙 Nights:</span>
-          <span class="detail-value">${nights} night${nights > 1 ? 's' : ''}</span>
+          <span class="detail-label">🌙 Nights: </span>
+          <span class="detail-value">${nights} night${nights > 1 ? "s" : ""}</span>
         </div>
 
         <div class="detail-row">
-          <span class="detail-label">👥 Total Guests:</span>
-          <span class="detail-value">${guests} guest${guests > 1 ? 's' : ''}</span>
+          <span class="detail-label">👥 Total Guests: </span>
+          <span class="detail-value">${guests} guest${guests > 1 ? "s" : ""}</span>
         </div>
 
-        ${children > 0 || adults !== guests ? `
+        ${
+          children > 0 || adults !== guests
+            ? `
           <div class="guest-breakdown">
-            <strong style="color: #555;">Guest Breakdown:</strong><br>
+            <strong style="color: #555;">Guest Breakdown: </strong><br>
             <div style="margin-top: 8px;">
               👨 Adults: <strong>${adults}</strong><br>
               👶 Children: <strong>${children}</strong>
             </div>
           </div>
-        ` : ''}
+        `
+            : ""
+        }
 
-        <div class="detail-row">
-          <span class="detail-label">💰 Total Amount:</span>
-          <span class="detail-value" style="color: #28a745; font-weight: bold; font-size: 18px;">
-            ₹${totalPrice.toLocaleString('en-IN')}
-          </span>
+        <!-- ✅ Price Breakdown with Base + GST (18%) -->
+        <div class="price-breakdown">
+          <h3 style="margin: 0 0 15px 0; color: #1976d2;">💰 Payment Summary</h3>
+          
+          <div class="price-row">
+            <span>Base Amount:</span>
+            <span><strong>₹${basePrice.toLocaleString("en-IN")}</strong></span>
+          </div>
+          
+          <div class="price-row">
+            <span>GST (18%):</span>
+            <span><strong>₹${gstAmount.toLocaleString("en-IN")}</strong></span>
+          </div>
+          
+          <div class="price-row price-total">
+            <span>Total Amount:</span>
+            <span>₹${totalPrice.toLocaleString("en-IN")}</span>
+          </div>
+          
+          ${
+            pricePerNight > 0
+              ? `
+          <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #90caf9; font-size: 14px; color: #555;">
+            <div style="margin-bottom: 5px;">
+              📊 Calculation: ₹${pricePerNight.toLocaleString("en-IN")} × ${nights} night${nights > 1 ? "s" : ""} × ${numberOfRooms} room${numberOfRooms > 1 ? "s" : ""} = ₹${basePrice.toLocaleString("en-IN")}
+            </div>
+            <div>
+              📈 GST: ₹${basePrice.toLocaleString("en-IN")} × 18% = ₹${gstAmount.toLocaleString("en-IN")}
+            </div>
+          </div>
+          `
+              : ""
+          }
         </div>
 
-        ${specialRequests ? `
+        ${
+          specialRequests
+            ? `
           <div class="alert">
             <strong>📝 Special Requests:</strong><br>
             ${specialRequests}
           </div>
-        ` : ''}
+        `
+            : ""
+        }
 
         <div style="margin-top: 30px; padding: 20px; background: #e8f5e9; border-radius: 8px; text-align: center;">
           <p style="margin: 0; color: #2e7d32;">

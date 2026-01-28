@@ -1,4 +1,4 @@
-import mongoose, { Document, Schema, Model, HydratedDocument } from 'mongoose';
+import mongoose, { Document, HydratedDocument, Model, Schema } from 'mongoose';
 
 // Interface for Booking Document
 export interface IBooking extends Document {
@@ -7,7 +7,7 @@ export interface IBooking extends Document {
   checkIn: Date;
   checkOut: Date;
   guests: number;
-  children: number; // ✅ ADDED - Optional field
+  children: number;
   numberOfRooms: number;
   totalPrice: number;
   status: 'pending' | 'confirmed' | 'cancelled' | 'completed';
@@ -20,8 +20,8 @@ export interface IBooking extends Document {
   bookingReference: string;
   nights: number;
   pricePerNight: number;
-  taxAmount?: number;
-  discountAmount?: number;
+  gstAmount: number;
+  discountAmount: number;
   cancellationReason?: string;
   cancelledAt?: Date;
   cancelledBy?: mongoose.Types.ObjectId;
@@ -71,7 +71,7 @@ const bookingSchema = new Schema<IBooking, IBookingModel>({
     min: [1, 'At least 1 guest is required'],
     max: [20, 'Maximum 20 guests allowed']
   },
-  children: { // ✅ ADDED - Optional field
+  children: {
     type: Number,
     default: 0,
     min: [0, 'Children cannot be negative'],
@@ -98,10 +98,10 @@ const bookingSchema = new Schema<IBooking, IBookingModel>({
     required: [true, 'Price per night is required'],
     min: [0, 'Price per night cannot be negative']
   },
-  taxAmount: {
+  gstAmount: {
     type: Number,
     default: 0,
-    min: [0, 'Tax amount cannot be negative']
+    min: [0, 'GST amount cannot be negative']
   },
   discountAmount: {
     type: Number,
@@ -230,6 +230,11 @@ bookingSchema.virtual('adults').get(function(this: HydratedDocument<IBooking>) {
   return this.guests - (this.children || 0);
 });
 
+// Virtual for base price (before GST)
+bookingSchema.virtual('basePrice').get(function(this: HydratedDocument<IBooking>) {
+  return this.pricePerNight * this.nights * this.numberOfRooms;
+});
+
 // Virtual for booking duration
 bookingSchema.virtual('duration').get(function(this: HydratedDocument<IBooking>) {
   return `${this.nights} night${this.nights > 1 ? 's' : ''}`;
@@ -270,11 +275,11 @@ bookingSchema.pre('save', function(this: HydratedDocument<IBooking>) {
     this.nights = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   }
   
+  // Calculate total price: Base + GST (No discounts)
   if (this.pricePerNight && !this.totalPrice) {
-    const basePrice = this.pricePerNight * this.nights;
-    const tax = this.taxAmount || 0;
-    const discount = this.discountAmount || 0;
-    this.totalPrice = basePrice + tax - discount;
+    const basePrice = this.pricePerNight * this.nights * this.numberOfRooms;
+    const gst = this.gstAmount || Math.round(basePrice * 0.18);
+    this.totalPrice = basePrice + gst;
   }
 });
 
@@ -307,10 +312,9 @@ bookingSchema.methods.canBeCancelled = function(this: HydratedDocument<IBooking>
 };
 
 bookingSchema.methods.calculateTotalPrice = function(this: HydratedDocument<IBooking>, pricePerNight: number): number {
-  const basePrice = pricePerNight * this.nights;
-  const tax = this.taxAmount || 0;
-  const discount = this.discountAmount || 0;
-  return basePrice + tax - discount;
+  const basePrice = pricePerNight * this.nights * this.numberOfRooms;
+  const gst = Math.round(basePrice * 0.18); // 18% GST
+  return basePrice + gst;
 };
 
 bookingSchema.methods.getBookingDuration = function(this: HydratedDocument<IBooking>): string {
