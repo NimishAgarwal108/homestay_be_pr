@@ -11,6 +11,7 @@ import {
   getRoomAvailability,
   checkDateAvailability
 } from '../controllers/room';
+import { migrateRooms } from '../controllers/migrateRoomsController';
 import { getUnavailableDatesByRoomType } from '../controllers/room/getUnavailableDatesByRoomType'; // ✅ NEW
 import { adminAuth } from '../middleware/adminAuth';
 
