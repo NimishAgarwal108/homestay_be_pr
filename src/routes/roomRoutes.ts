@@ -17,7 +17,7 @@ import { adminAuth } from '../middleware/adminAuth';
 
 const router = express.Router();
 
-router.get('/migrate', migrateRooms);
+
 router.get('/admin/all', adminAuth, getAllRoomsAdmin);
 
 /**
@@ -50,6 +50,11 @@ router.post('/', adminAuth, createRoom);
  * @desc    Get room availability calendar (30 days)
  * @access  Public
  */
+
+
+router.get('/migrate', migrateRooms);
+
+
 router.get('/:id/availability-calendar', getRoomAvailability);
 
 /**
