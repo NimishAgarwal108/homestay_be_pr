@@ -17,20 +17,7 @@ import { adminAuth } from '../middleware/adminAuth';
 
 const router = express.Router();
 
-/**
- * IMPORTANT: Specific routes MUST come before generic /:id routes
- * Admin routes are now at the router level, not nested
- */
-
-// ========================================
-// ADMIN ROUTES (Protected) - at /rooms level
-// ========================================
-
-/**
- * @route   GET /api/rooms/admin/all
- * @desc    Get ALL rooms (including unavailable) - ADMIN ONLY
- * @access  Private (Admin only)
- */
+router.get('/migrate', migrateRooms);
 router.get('/admin/all', adminAuth, getAllRoomsAdmin);
 
 /**
