@@ -7,7 +7,7 @@ dotenv.config();
 const createAdmin = async () => {
   try {
     // New admin credentials
-    const newAdminEmail = 'admin@aamantranstays.com';
+    const newAdminEmail = 'aamantranstays@gmail.com';
     const newAdminPassword = 'Aam@ntar@n12!';
     const newAdminName = 'Dr Mayank Mall';
 
