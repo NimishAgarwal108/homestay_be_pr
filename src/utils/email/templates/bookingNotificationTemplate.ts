@@ -73,6 +73,7 @@ export const bookingNotificationTemplate = (data: BookingEmailData): string => {
         .detail-label {
           font-weight: bold;
           color: #555;
+          margin-right:8px;
         }
         .detail-value {
           color: #333;
@@ -151,22 +152,24 @@ export const bookingNotificationTemplate = (data: BookingEmailData): string => {
         <!-- ✅ REMOVED: Email line no longer displayed in admin notification -->
 
         <div class="detail-row">
-          <span class="detail-label">📱 Phone:</span>
-          <span class="detail-value">${guestPhone}</span>
+          <span class="detail-label">📱 Phone: </span>
+          <span class="detail-value">
+            <a href="tel:${guestPhone}">${guestPhone}</a>
+          </span>
         </div>
 
         <div class="detail-row">
-          <span class="detail-label">🏠 Room Type:</span>
+          <span class="detail-label">🏠 Room Type: </span>
           <span class="detail-value">${roomName}</span>
         </div>
 
         <div class="detail-row">
-          <span class="detail-label">🔢 Number of Rooms:</span>
+          <span class="detail-label">🔢 Number of Rooms: </span>
           <span class="detail-value">${numberOfRooms} room${numberOfRooms > 1 ? "s" : ""}</span>
         </div>
 
         <div class="detail-row">
-          <span class="detail-label">📅 Check-in:</span>
+          <span class="detail-label">📅 Check-in: </span>
           <span class="detail-value">${new Date(checkIn).toLocaleDateString(
             "en-US",
             {
@@ -179,7 +182,7 @@ export const bookingNotificationTemplate = (data: BookingEmailData): string => {
         </div>
 
         <div class="detail-row">
-          <span class="detail-label">📅 Check-out:</span>
+          <span class="detail-label">📅 Check-out: </span>
           <span class="detail-value">${new Date(checkOut).toLocaleDateString(
             "en-US",
             {
@@ -192,12 +195,12 @@ export const bookingNotificationTemplate = (data: BookingEmailData): string => {
         </div>
 
         <div class="detail-row">
-          <span class="detail-label">🌙 Nights:</span>
+          <span class="detail-label">🌙 Nights: </span>
           <span class="detail-value">${nights} night${nights > 1 ? "s" : ""}</span>
         </div>
 
         <div class="detail-row">
-          <span class="detail-label">👥 Total Guests:</span>
+          <span class="detail-label">👥 Total Guests: </span>
           <span class="detail-value">${guests} guest${guests > 1 ? "s" : ""}</span>
         </div>
 
@@ -205,7 +208,7 @@ export const bookingNotificationTemplate = (data: BookingEmailData): string => {
           children > 0 || adults !== guests
             ? `
           <div class="guest-breakdown">
-            <strong style="color: #555;">Guest Breakdown:</strong><br>
+            <strong style="color: #555;">Guest Breakdown: </strong><br>
             <div style="margin-top: 8px;">
               👨 Adults: <strong>${adults}</strong><br>
               👶 Children: <strong>${children}</strong>
